@@ -437,7 +437,7 @@ class PPOTrainer(BaseTrainer):
             if length_sampler is not None:
                 generation_kwargs["max_new_tokens"] = length_sampler()
             response = self.accelerator.unwrap_model(self.model).generate(
-                input_ids=query_tensor.unsqueeze(dim=0), **generation_kwargs
+                input_ids=query_tensor, **generation_kwargs #query_tensor.unsqueeze(dim=0)
             )
 
             if not return_prompt and not self.is_encoder_decoder:
@@ -518,7 +518,15 @@ class PPOTrainer(BaseTrainer):
         Returns:
             `tuple`: The input processed data.
         """
+        # print("IN _step_safety_checker")
+        # print(type(queries), type(responses), type(scores))
+        # print(queries, responses, scores)
+        # print(queries.shape, responses.shape, scores.shape)
+        # print(type([queries, responses, scores]))
+        # queries = torch.tensor(queries)
+        # responses =  torch.tensor(responses)
         for name, tensor_list in zip(["queries", "responses", "scores"], [queries, responses, scores]):
+            # print(name, tensor_list)
             if not isinstance(tensor_list, list):
                 raise ValueError(f"{name} must be a list of tensors - got {type(tensor_list)}")
             if not isinstance(tensor_list[0], torch.Tensor):
@@ -887,6 +895,8 @@ class PPOTrainer(BaseTrainer):
                 all_logits.append(logits)
             else:
                 del logits
+            
+
             all_values.append(values)
             all_logprobs.append(logprobs)
             all_masks.append(masks)
@@ -1225,4 +1235,4 @@ class PPOTrainer(BaseTrainer):
     def _save_pretrained(self, save_directory: str) -> None:
         self.accelerator.unwrap_model(self.model).save_pretrained(save_directory)
         self.tokenizer.save_pretrained(save_directory)
-        self.create_model_card(save_directory)
+        # self.create_model_card(save_directory)
