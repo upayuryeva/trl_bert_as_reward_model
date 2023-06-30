@@ -399,6 +399,7 @@ class PPOTrainer(BaseTrainer):
     def generate(
         self,
         query_tensor: Union[torch.Tensor, List[torch.Tensor]],
+        attention_mask: torch.Tensor,
         length_sampler: Callable = None,
         batch_size: int = 4,
         return_prompt: bool = True,
@@ -424,25 +425,49 @@ class PPOTrainer(BaseTrainer):
             `torch.LongTensor`: A tensor of shape (`batch_size`, `gen_len`) containing response tokens.
         """
 
-        if isinstance(query_tensor, List):
-            return self._generate_batched(
-                query_tensor,
-                length_sampler=length_sampler,
-                batch_size=batch_size,
-                return_prompt=return_prompt,
-                **generation_kwargs,
-            )
+        # print("generate")
 
-        else:
-            if length_sampler is not None:
-                generation_kwargs["max_new_tokens"] = length_sampler()
-            response = self.accelerator.unwrap_model(self.model).generate(
-                input_ids=query_tensor, **generation_kwargs #query_tensor.unsqueeze(dim=0)
-            )
+        # if isinstance(query_tensor, List):
+        #     print("batched")
+        #     return self._generate_batched(
+        #         query_tensor,
+        #         length_sampler=length_sampler,
+        #         batch_size=batch_size,
+        #         return_prompt=return_prompt,
+        #         **generation_kwargs,
+        #     )
 
-            if not return_prompt and not self.is_encoder_decoder:
-                return response[:, query_tensor.shape[0] :]
-            return response
+        # else:
+        #     print("not_batched")
+        #     if length_sampler is not None:
+        #         generation_kwargs["max_new_tokens"] = length_sampler()
+        #     response = self.accelerator.unwrap_model(self.model).generate(
+        #         input_ids=query_tensor.unsqueeze(dim=0), **generation_kwargs
+        #     )
+
+        #     if not return_prompt and not self.is_encoder_decoder:
+        #         return response[:, query_tensor.shape[0] :]
+        #     return response
+        
+        return self.generate_ira(query_tensor=query_tensor, attention_mask=attention_mask,  **generation_kwargs)
+
+
+    def generate_ira(
+        self,
+        query_tensor: torch.Tensor,
+        attention_mask: torch.Tensor,
+        length_sampler: Callable = None,
+        batch_size: int = 4,
+        return_prompt: bool = True,
+        **generation_kwargs,
+    ):
+        generations = self.accelerator.unwrap_model(self.model).generate(
+            inputs=query_tensor, 
+            attention_mask=attention_mask,
+            **generation_kwargs
+        )
+        return generations
+        
 
     def _generate_batched(
         self,
@@ -454,6 +479,8 @@ class PPOTrainer(BaseTrainer):
         **generation_kwargs,
     ):
         outputs = []
+
+        print("batched")
 
         padding_side_default = self.tokenizer.padding_side
         if not self.is_encoder_decoder:
